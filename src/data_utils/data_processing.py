@@ -22,6 +22,29 @@ def get_file_paths(path_to_data: str = 'drive/MyDrive/Belgorodskaya/*.tif', feat
   file_paths = {fn: list(filter(lambda x: fn in x, files_to_mosaic)) for fn in feature_names}
   return file_paths
 
+def get_closest_pixel(dataset: gdal.Dataset, coord: np.ndarray):
+  """Finds the closest pixel indices in the dataset
+
+  Args:
+      dataset (gdal.Dataset): dataset with pixels
+      coord (np.ndarray): coordinate for which the closest pixel's indices in the dataset will be found
+
+  Returns:
+      tuple: x, y indices among the dataset
+  """
+  coords_dict = get_coords_res(dataset)
+  raster_xsize = dataset.RasterXSize
+  raster_ysize = dataset.RasterYSize
+  x_0, y_0, x_res, y_res = coords_dict['x'], coords_dict['y'], coords_dict['x_res'], coords_dict['y_res']
+  # coord = [37, 46.5]
+  x_coords = np.array(range(raster_xsize)) * x_res + x_0
+  y_coords = np.array(range(raster_ysize)) * y_res + y_0
+  closest_x_idx = np.argmin(np.abs(x_coords - coord[0]))
+  closest_y_idx = np.argmin(np.abs(y_coords - coord[1]))
+  return closest_x_idx, closest_y_idx
+
+
+
 def get_coords_res(dataset: gdal.Dataset):
   """
   For given dataset returns position of top left corner and resolutions
