@@ -5,11 +5,11 @@ import os, glob
 import numpy as np
 from tqdm import tqdm
 import subprocess
+import pandas as pd
 
 def get_file_paths(path_to_data: str = 'drive/MyDrive/Belgorodskaya/*.tif', feature_names: list = ['tmax', 'tmin', 'pr']):
   """
   Filters out required features amongs terraclim dataset
-
   Arguments:
     path_to_data (str): path to directory that containts terraclim dataset
     feature_names (list): list of required features
@@ -22,13 +22,12 @@ def get_file_paths(path_to_data: str = 'drive/MyDrive/Belgorodskaya/*.tif', feat
   file_paths = {fn: list(filter(lambda x: fn in x, files_to_mosaic)) for fn in feature_names}
   return file_paths
 
+
 def get_closest_pixel(dataset: gdal.Dataset, coord: np.ndarray):
   """Finds the closest pixel indices in the dataset
-
   Args:
       dataset (gdal.Dataset): dataset with pixels
       coord (np.ndarray): coordinate for which the closest pixel's indices in the dataset will be found
-
   Returns:
       tuple: x, y indices among the dataset
   """
@@ -39,19 +38,77 @@ def get_closest_pixel(dataset: gdal.Dataset, coord: np.ndarray):
   # coord = [37, 46.5]
   x_coords = np.array(range(raster_xsize)) * x_res + x_0
   y_coords = np.array(range(raster_ysize)) * y_res + y_0
-  closest_x_idx = np.argmin(np.abs(x_coords - coord[0]))
-  closest_y_idx = np.argmin(np.abs(y_coords - coord[1]))
+  d = []
+  R = 6371
+  for theta in x_coords:
+    for fi in y_coords:
+            r = R*np.sqrt((theta - coord[0])**2 + np.cos((theta + coord[0])/2)**2*(fi - coord[1])**2)
+            d.append(r)
+  N = np.argmin(d)
+  closest_x_idx = (N//len(y_coords))
+  closest_y_idx = (- closest_x_idx)*len(y_coords) + N - 1
   return closest_x_idx, closest_y_idx
+
+
+def closest_pixel_for_station(station_name: str, dataset: gdal.Dataset, station_list: pd.DataFrame):
+    """Finds the closest pixel indices in the dataset for the station
+    Args:
+      station_name (str): name of the station
+      dataset (gdal.Dataset): dataset with pixels
+      station_list (pd.DataFrame): table with stations' coordinates 
+    Returns:
+      tuple: x, y indices among the dataset
+    """
+    station = station_list[station_list['Наименование станции']==station_name]
+    coord = [station['Широта'].values[0], station['Долгота'].values[0]]
+    pix = get_closest_pixel(dataset=dataset, coord=coord)
+    return pix 
+
+  
+def make_model_dataset(station_name: str,
+                       start_date: str,
+                       end_date: str,
+                       station_list: pd.DataFrame,
+                       path_to_history: str='data/history', 
+                       path_to_elev: str='data/elev', 
+                       features: list=['tasmax', 'tasmin', 'pr']):
+
+    table = pd.DataFrame({"Date":pd.date_range(start="01.01.2006",
+                                        end = "01.31.2020",
+                                        freq="D")})
+    for feature_name in features:
+        file_paths = [path_to_history+ '/' + fn for fn in os.listdir(path_to_history) if (fn[-4:] == '.tif' ) and feature_name in fn]   
+        dataset = gdal.Open(file_paths[0], gdal.GA_ReadOnly)  
+        pix = closest_pixel_for_station(station_name=station_name, dataset=dataset, station_list=station_list)
+        array = []
+        for i in range(1, 5145):
+            band = dataset.GetRasterBand(i)
+            if feature_name in ['tasmax', 'tasmin']:
+                arr = band.ReadAsArray()
+                array.append(arr[pix[1]][pix[0]] - 273.15)
+            else:
+                arr = band.ReadAsArray()
+                array.append(arr[pix[1]][pix[0]])
+        table = table.join(pd.DataFrame({feature_name: array}))
+    file_paths = [path_to_elev+ '/' + 'elevation.tif']   
+    dataset = gdal.Open(file_paths[0], gdal.GA_ReadOnly)  
+    array = []
+    band = dataset.GetRasterBand(1)
+    arr = band.ReadAsArray()
+    array.append(arr[pix[1]][pix[0]])
+    table = table.join(pd.DataFrame({'el': 5144*array}))
+    table = table.set_index('Date')
+    table = table.loc[table.index >= pd.to_datetime(start_date)]
+    table = table.loc[table.index <= pd.to_datetime(end_date)]
+    return table
 
 
 
 def get_coords_res(dataset: gdal.Dataset):
   """
   For given dataset returns position of top left corner and resolutions
-
   Arguments:
     dataset (osgeo.gdal.Dataset): gdal dataset
-
   Returns:
     dict: containts coordinates of top left corner and
        resolutions alog x and y axes
@@ -68,7 +125,6 @@ def extract_latitude_longtitute(path_to_tifs: str, feature_name: str):
   """
   Extract 1d arrays of longitutde and latitude of given .tif data
   Helps to build a mapping between raster spatial indices and coordinates on the earth
-
   Arguments:
     path_to_data (str): path to directory that containts terraclim dataset
     feature_names (str): feature name of the interest
@@ -91,7 +147,6 @@ def extract_latitude_longtitute(path_to_tifs: str, feature_name: str):
 def plot_tl_positions(file_paths: list):
   """
   Viualize positions of top left corners of dataset given 
-
   Arguments:
   file_paths (list): list of paths to files that contain datasets
   """
@@ -120,7 +175,6 @@ def dataset_to_np(dataset: gdal.Dataset, x_off: int, y_off: int, xsize: int, ysi
   """
   Converts gdal.Dataset to numpy array
   !NB: raster bands are enumerated starting from 1!
-
   Arguments:
     dataset (gdal.Dataset): dataset to cast
     x_off (int): starting x position - idx
