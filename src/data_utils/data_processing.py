@@ -35,20 +35,22 @@ def get_closest_pixel(dataset: gdal.Dataset, coord: np.ndarray):
   raster_xsize = dataset.RasterXSize
   raster_ysize = dataset.RasterYSize
   x_0, y_0, x_res, y_res = coords_dict['x'], coords_dict['y'], coords_dict['x_res'], coords_dict['y_res']
-  # coord = [37, 46.5]
   x_coords = np.array(range(raster_xsize)) * x_res + x_0
   y_coords = np.array(range(raster_ysize)) * y_res + y_0
-  d = []
   R = 6371
-  for theta in x_coords:
-    for fi in y_coords:
-            r = R*np.sqrt((theta - coord[0])**2 + np.cos((theta + coord[0])/2)**2*(fi - coord[1])**2)
-            d.append(r)
-  N = np.argmin(d)
-  closest_x_idx = (N//len(y_coords))
-  closest_y_idx = (- closest_x_idx)*len(y_coords) + N - 1
+  closest = 21212121
+  I = 0
+  J = 0
+  for i, theta in enumerate(x_coords):
+    for j, fi in enumerate(y_coords):
+            r = great_circle((theta,fi), coord).kilometers
+            if r < closest:
+              closest = r
+              I = i + 1
+              J = j + 1
+  closest_x_idx = I 
+  closest_y_idx = J
   return closest_x_idx, closest_y_idx
-
 
 def closest_pixel_for_station(station_name: str, dataset: gdal.Dataset, station_list: pd.DataFrame):
     """Finds the closest pixel indices in the dataset for the station
@@ -60,7 +62,7 @@ def closest_pixel_for_station(station_name: str, dataset: gdal.Dataset, station_
       tuple: x, y indices among the dataset
     """
     station = station_list[station_list['Наименование станции']==station_name]
-    coord = [station['Широта'].values[0], station['Долгота'].values[0]]
+    coord = [station['Долгота'].values[0], station['Широта'].values[0]]
     pix = get_closest_pixel(dataset=dataset, coord=coord)
     return pix 
 
