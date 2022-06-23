@@ -6,6 +6,7 @@ import numpy as np
 from tqdm import tqdm
 import subprocess
 import pandas as pd
+from geopy.distance import great_circle
 
 def get_file_paths(path_to_data: str = 'drive/MyDrive/Belgorodskaya/*.tif', feature_names: list = ['tmax', 'tmin', 'pr']):
   """
