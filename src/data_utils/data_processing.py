@@ -47,8 +47,8 @@ def get_closest_pixel(dataset: gdal.Dataset, coord: np.ndarray):
             r = great_circle((theta,fi), coord).kilometers
             if r < closest:
               closest = r
-              I = i + 1
-              J = j + 1
+              I = i# + 1
+              J = j# + 1
   closest_x_idx = I 
   closest_y_idx = J
   return closest_x_idx, closest_y_idx
