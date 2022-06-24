@@ -37,64 +37,35 @@ def get_file_paths(
 
 
 def get_closest_pixel(dataset: gdal.Dataset, coord: np.ndarray):
-    """Finds the closest pixel indices in the dataset
-    Args:
-        dataset (gdal.Dataset): dataset with pixels
-        coord (np.ndarray): coordinate for which the closest pixel's indices in the dataset will be found
-    Returns:
-        tuple: x, y indices among the dataset
-    """
-    coords_dict = get_coords_res(dataset)
-    raster_xsize = dataset.RasterXSize
-    raster_ysize = dataset.RasterYSize
-    x_0, y_0, x_res, y_res = (
-        coords_dict["x"],
-        coords_dict["y"],
-        coords_dict["x_res"],
-        coords_dict["y_res"],
-    )
-    # coord = [37, 46.5]
-    x_coords = np.array(range(raster_xsize)) * x_res + x_0
-    y_coords = np.array(range(raster_ysize)) * y_res + y_0
-    # for y in y_coords:
-    #   for x in x_coords:
-    #     print((x, y))
-    # d = []
-    R = 6371
-    # R = 6373
-    # coord0 = radians(coord[0])
-    # coord1 = radians(coord[1])
-    closest = 21212121
-    I = 0
-    J = 0
-    for i, theta in enumerate(x_coords):
-        for j, fi in enumerate(y_coords):
-            # r = R*np.sqrt((theta - coord[0])**2 + np.cos((theta + coord[0])/2)**2*(fi - coord[1])**2)
-            # r = geodesic((theta,fi), coord).kilometers
-            r = great_circle((theta, fi), coord).kilometers
-            # print(r)
-            # theta = radians(theta)
-            # fi = radians(fi)
-            # dlon = fi - coord1
-            # dlat = theta - coord0
-            # a = sin(dlat / 2)**2 + cos(coord0) * cos(theta) * sin(dlon / 2)**2
-            # r = R * 2 * atan2(sqrt(a), sqrt(1 - a))
-            # d.append(r)
+  """Finds the closest pixel indices in the dataset
+  Args:
+      dataset (gdal.Dataset): dataset with pixels
+      coord (np.ndarray): coordinate for which the closest pixel's indices in the dataset will be found
+  Returns:
+      tuple: x, y indices among the dataset
+  """
+  coords_dict = get_coords_res(dataset)
+  raster_xsize = dataset.RasterXSize
+  raster_ysize = dataset.RasterYSize
+  x_0, y_0, x_res, y_res = coords_dict['x'], coords_dict['y'], coords_dict['x_res'], coords_dict['y_res']
+  x_coords = np.array(range(raster_xsize)) * x_res + x_0
+  y_coords = np.array(range(raster_ysize)) * y_res + y_0
+  R = 6371
+  closest = 21212121
+  I = 0
+  J = 0
+  for i, theta in enumerate(x_coords):
+    for j, fi in enumerate(y_coords):
+            r = great_circle((theta,fi), coord).kilometers
             if r < closest:
-                closest = r
-                I = i + 1
-                J = j + 1
-    # N = np.argmin(d)
-    # closest_x_idx = (N//len(y_coords))
-    # closest_y_idx = (- closest_x_idx)*len(y_coords) + N - 1
-    closest_x_idx = I
-    closest_y_idx = J
-    return closest_x_idx, closest_y_idx
+              closest = r
+              I = i# + 1
+              J = j# + 1
+  closest_x_idx = I 
+  closest_y_idx = J
+  return closest_x_idx, closest_y_idx
 
-
-def closest_pixel_for_station(
-    station_name: str, dataset: gdal.Dataset, station_list: pd.DataFrame
-):
+def closest_pixel_for_station(station_name: str, dataset: gdal.Dataset, station_list: pd.DataFrame):
     """Finds the closest pixel indices in the dataset for the station
     Args:
       station_name (str): name of the station
@@ -108,31 +79,25 @@ def closest_pixel_for_station(
     pix = get_closest_pixel(dataset=dataset, coord=coord)
     return pix
 
+  
+def make_model_dataset(station_name: str,
+                       start_date: str,
+                       end_date: str,
+                       wind_cmip: np.array,
+                       station_list: pd.DataFrame,
+                       path_to_history: str='data/history', 
+                       path_to_elev: str='data/elev', 
+                       features: list=['tasmax', 'tasmin', 'pr'],
+                       pix: list=[-1, -1]):
 
-def make_model_dataset(
-    station_name: str,
-    start_date: str,
-    end_date: str,
-    wind_cmip: np.array,
-    station_list: pd.DataFrame,
-    path_to_history: str = "data/history",
-    path_to_elev: str = "data/elev",
-    features: list = ["tasmax", "tasmin", "pr"],
-):
-
-    table = pd.DataFrame(
-        {"Date": pd.date_range(start="01.01.2006", end="01.31.2020", freq="D")}
-    )
+    table = pd.DataFrame({"Date":pd.date_range(start="01.01.2006",
+                                        end = "01.31.2020",
+                                        freq="D")})
     for feature_name in features:
-        file_paths = [
-            path_to_history + "/" + fn
-            for fn in os.listdir(path_to_history)
-            if (fn[-4:] == ".tif") and feature_name in fn
-        ]
+        file_paths = [path_to_history+ '/' + fn for fn in os.listdir(path_to_history) if (fn[-4:] == '.tif' ) and feature_name in fn]   
         dataset = gdal.Open(file_paths[0], gdal.GA_ReadOnly)
-        pix = closest_pixel_for_station(
-            station_name=station_name, dataset=dataset, station_list=station_list
-        )
+        if pix[0] == -1 and pix[1] == -1:  
+          pix = closest_pixel_for_station(station_name=station_name, dataset=dataset, station_list=station_list)
         array = []
         for i in range(1, 5145):
             band = dataset.GetRasterBand(i)
