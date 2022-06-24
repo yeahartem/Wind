@@ -74,15 +74,17 @@ def make_model_dataset(station_name: str,
                        station_list: pd.DataFrame,
                        path_to_history: str='data/history', 
                        path_to_elev: str='data/elev', 
-                       features: list=['tasmax', 'tasmin', 'pr']):
+                       features: list=['tasmax', 'tasmin', 'pr'],
+                       pix: list=[-1, -1]):
 
     table = pd.DataFrame({"Date":pd.date_range(start="01.01.2006",
                                         end = "01.31.2020",
                                         freq="D")})
     for feature_name in features:
         file_paths = [path_to_history+ '/' + fn for fn in os.listdir(path_to_history) if (fn[-4:] == '.tif' ) and feature_name in fn]   
-        dataset = gdal.Open(file_paths[0], gdal.GA_ReadOnly)  
-        pix = closest_pixel_for_station(station_name=station_name, dataset=dataset, station_list=station_list)
+        dataset = gdal.Open(file_paths[0], gdal.GA_ReadOnly)
+        if pix[0] == -1 and pix[1] == -1:  
+          pix = closest_pixel_for_station(station_name=station_name, dataset=dataset, station_list=station_list)
         array = []
         for i in range(1, 5145):
             band = dataset.GetRasterBand(i)
