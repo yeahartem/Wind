@@ -20,14 +20,14 @@ import warnings
 import pickle
 warnings.filterwarnings("ignore")
 
-def make_ds(start_date, end_date, station_name, station_list, ds_for_y, cmip, include_day_ohe=False, speed_th=20):
+def make_ds(start_date, end_date, station_name, station_list, ds_for_y, cmip, include_day_ohe=False, speed_th=20, pix=[-1, -1]):
     '''
     Makes dataset consisting of X from make_model_dataset(weatherstation_list.csv) and y from data_meteo_kk.csv.
     
     station_list - weatherstation_list.csv,
     ds_for_y - data_meteo_kk.csv.
     '''
-    a = make_model_dataset(station_name = station_name, start_date = start_date, wind_cmip=cmip, end_date = end_date, station_list = station_list)
+    a = make_model_dataset(station_name = station_name, start_date = start_date, wind_cmip=cmip, end_date = end_date, station_list = station_list, pix=pix)
     a.insert(loc=0, column='day', value=a.index)
     a['day'] = a['day'].dt.dayofyear
     
@@ -56,7 +56,7 @@ def make_ds(start_date, end_date, station_name, station_list, ds_for_y, cmip, in
     return X, y
 
 
-def dss(start_date, end_date, station_name, station_list, ds_for_y, delta_in_x, cmip, include_day_ohe=False, speed_th=20):
+def dss(start_date, end_date, station_name, station_list, ds_for_y, delta_in_x, cmip, include_day_ohe=False, speed_th=20, pix=[-1, -1]):
     '''
     Includes several days into X. Makes dataset consisting of X from make_model_dataset(weatherstation_list.csv) and y from data_meteo_kk.csv.
     
@@ -64,7 +64,7 @@ def dss(start_date, end_date, station_name, station_list, ds_for_y, delta_in_x, 
     ds_for_y - data_meteo_kk.csv,
     delta_in_x - number of days into X.
     '''
-    a = make_model_dataset(station_name = station_name, start_date = start_date, end_date = end_date, wind_cmip=cmip, station_list = station_list)
+    a = make_model_dataset(station_name = station_name, start_date = start_date, end_date = end_date, wind_cmip=cmip, station_list = station_list, pix=pix)
     a.insert(loc=0, column='day', value=a.index)
     a['day'] = a['day'].dt.dayofyear
 

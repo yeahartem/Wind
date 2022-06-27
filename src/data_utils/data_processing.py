@@ -196,7 +196,7 @@ def plot_tl_positions(file_paths: list):
 
 
 def dataset_to_np(
-    dataset: gdal.Dataset, x_off: int, y_off: int, xsize: int, ysize: int
+    dataset: gdal.Dataset, x_off: int, y_off: int, xsize: int, ysize: int, verbose: bool = False
 ):
     """
     Converts gdal.Dataset to numpy array
@@ -213,15 +213,20 @@ def dataset_to_np(
 
     shape = [dataset.RasterCount, ysize, xsize]
     output = np.empty(shape)
-    for r_idx in range(shape[0]):
-        band = dataset.GetRasterBand(r_idx + 1)
-        arr = band.ReadAsArray(x_off, y_off, xsize, ysize)
-        output[r_idx, :, :] = np.array(arr)
-
+    if verbose:
+        for r_idx in tqdm(range(shape[0])):
+            band = dataset.GetRasterBand(r_idx + 1)
+            arr = band.ReadAsArray(x_off, y_off, xsize, ysize)
+            output[r_idx, :, :] = np.array(arr)
+    else:
+        for r_idx in range(shape[0]):
+            band = dataset.GetRasterBand(r_idx + 1)
+            arr = band.ReadAsArray(x_off, y_off, xsize, ysize)
+            output[r_idx, :, :] = np.array(arr)
     return output
 
 
-def get_nps(feature_names, path_to_tifs, dset_num=0):
+def get_nps(feature_names, path_to_tifs, verbose=False, dset_num=0):
     file_paths = get_file_paths(path_to_tifs, feature_names)
     # open gdal files
     dsets = {}
@@ -237,6 +242,7 @@ def get_nps(feature_names, path_to_tifs, dset_num=0):
             y_off=0,
             xsize=dsets[fn].RasterXSize,
             ysize=dsets[fn].RasterYSize,
+            verbose=verbose,
         )
         # Scaling in accordance with dataset description
         if fn == "tmin" or fn == "tmax":
