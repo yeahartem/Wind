@@ -40,8 +40,8 @@ def assemble_numpy_ds(blocks: dict, target: dict, stations_pixs: dict) -> tuple:
     Returns:
         tuple: X, y
     """
-    X = []
-    y = []
+    X = {}
+    y = {}
     for k in tqdm(target.keys()):
         X_i = []
         for fn in blocks.keys():
@@ -57,10 +57,12 @@ def assemble_numpy_ds(blocks: dict, target: dict, stations_pixs: dict) -> tuple:
                 if X_i[X_i_idx].shape[0] == 1:
                     X_i[X_i_idx] = np.array([X_i[X_i_idx] for idx in range(X_i[-1].shape[0])]).squeeze() # repeating elevation
             X_i = np.stack(X_i, axis=1)
-            X.append(X_i)
-            y.append(y_i[:wind_len])
-    X = np.concatenate(X)
-    y = np.concatenate(y)
+            # X.append(X_i)
+            # y.append(y_i[:wind_len])
+            X[k] = X_i
+            y[k] = y_i[:wind_len]
+    # X = np.concatenate(X)
+    # y = np.concatenate(y)
     return (X, y)
 
 def get_y(df: pd.DataFrame, start: str, end: str, speed_th: float = 20., station_name: str =None) -> dict:
