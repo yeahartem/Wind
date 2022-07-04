@@ -4,6 +4,8 @@ import pytorch_lightning as pl
 from collections import OrderedDict
 import torchmetrics
 
+from sklearn import metrics
+
 
 class WindNet(nn.Module):
     def __init__(self, args) -> None:
@@ -36,6 +38,7 @@ class WindNet(nn.Module):
             self.maxpool,
             self.flatten,
             self.fc,
+            nn.Sigmoid(),
         ).double()
 
     def forward(self, X) -> torch.Tensor:
@@ -51,13 +54,23 @@ class WindNetPL(pl.LightningModule):
         self.args = args
         self.net = WindNet(self.args)
 
-        self.accuracy = torchmetrics.Accuracy()
+        self.accuracy = torchmetrics.Accuracy(
+            num_classes=2, threshold=args["threshold"]
+        )
         self.AUROC = torchmetrics.AUROC(num_classes=2)
-        self.precision_m = torchmetrics.Precision()
-        self.recall = torchmetrics.Recall()
-        # self.conf_matrix = torchmetrics.ConfusionMatrix(num_classes=2)
+        self.precision_m = torchmetrics.Precision(
+            num_classes=2, threshold=args["threshold"]
+        )
+        self.recall = torchmetrics.Recall(num_classes=2, threshold=args["threshold"])
+        self.F1 = torchmetrics.F1Score(num_classes=2, threshold=args["threshold"])
+        self.conf_matrix = torchmetrics.ConfusionMatrix(
+            num_classes=2, threshold=args["threshold"]
+        )
+        self.stats_scores = torchmetrics.StatScores(
+            num_classes=2, threshold=args["threshold"]
+        )
 
-        self.loss_f = nn.BCEWithLogitsLoss(pos_weight=self.args["pos_weight"])
+        self.loss_f = nn.BCELoss(weight=torch.tensor([1.0, self.args["pos_weight"]]))
 
     def forward(self, X):
         return self.net(X)
@@ -95,15 +108,47 @@ class WindNetPL(pl.LightningModule):
         # update and log
         predictions = outputs["preds"]
         target = outputs["target"]
-        self.accuracy(predictions, target.argmax(dim=1))
-        self.recall(predictions, target.argmax(dim=1))
-        self.AUROC(predictions, target.argmax(dim=1))
-        self.precision_m(predictions, target.argmax(dim=1))
-        # self.conf_matrix(predictions, target.argmax(dim=1))
-        self.log("train_acc_step", self.accuracy, prog_bar=True)
-        self.log("train_recall_step", self.recall, prog_bar=True)
-        self.log("train_AUROC_step", self.AUROC, prog_bar=True)
-        self.log("train_precision_step", self.precision_m, prog_bar=True)
+        conf_m = self.conf_matrix(predictions.argmax(dim=1), target.argmax(dim=1))
+        tp, fp, fn, tn = conf_m[0, 0], conf_m[0, 1], conf_m[1, 0], conf_m[1, 1]
+        acc = (tp + tn) / (conf_m.sum())
+        rec = (
+            tp / (tp + fp)
+            if (tp + fp) > 0
+            else torch.tensor(0.0, dtype=target.dtype, device=target.device)
+        )
+        prec = (
+            tp / (tp + fn)
+            if (tp + fn) > 0
+            else torch.tensor(0.0, dtype=target.dtype, device=target.device)
+        )
+        f1 = (
+            tp / (tp + 0.5 * (fp + fn))
+            if ((tp + 0.5 * (fp + fn))) > 0
+            else torch.tensor(0.0, dtype=target.dtype, device=target.device)
+        )
+        # acc = self.accuracy(predictions, target.argmax(dim=1))
+        # rec = self.recall(predictions, target.argmax(dim=1))
+        auroc = self.AUROC(predictions, target.argmax(dim=1))
+        # prec = self.precision_m(predictions, target.argmax(dim=1))
+        # f1 = self.F1(predictions, target.argmax(dim=1))
+        # stats_scores = self.stats_scores(predictions, target.argmax(dim=1))
+
+        # self.log("train_acc_step", self.accuracy, prog_bar=True)
+        # self.log("train_recall_step", self.recall, prog_bar=True)
+        # self.log("train_AUROC_step", self.AUROC, prog_bar=True)
+        # self.log("train_precision_step", self.precision_m, prog_bar=True)
+        self.logger.experiment.add_scalars(
+            "clf_metrics_train",
+            {
+                "train_acc": acc,
+                "train_recall": rec,
+                "train_auroc": auroc,
+                "train_prec": prec,
+                "train_f1": f1,
+            },
+            global_step=self.global_step,
+        )
+
         # self.log("train_conf_matrix_step", self.conf_matrix)
 
     #     # self.metric(outputs['preds'], outputs['target'])
@@ -135,19 +180,52 @@ class WindNetPL(pl.LightningModule):
         # update and log
         predictions = outputs["preds"]
         target = outputs["target"]
-        acc = self.accuracy(predictions, target.argmax(dim=1))
-        rec = self.recall(predictions, target.argmax(dim=1))
+        conf_m = self.conf_matrix(predictions, target.argmax(dim=1))
+        tp, fp, fn, tn = conf_m[0, 0], conf_m[0, 1], conf_m[1, 0], conf_m[1, 1]
+        acc = (tp + fp) / (conf_m.sum())
+        rec = (
+            tp / (tp + fp)
+            if (tp + fp) > 0
+            else torch.tensor(0.0, dtype=target.dtype, device=target.device)
+        )
+        prec = (
+            tp / (tp + fn)
+            if (tp + fn) > 0
+            else torch.tensor(0.0, dtype=target.dtype, device=target.device)
+        )
+        f1 = (
+            tp / (tp + 0.5 * (fp + fn))
+            if ((tp + 0.5 * (fp + fn))) > 0
+            else torch.tensor(0.0, dtype=target.dtype, device=target.device)
+        )
+        # acc = self.accuracy(predictions, target.argmax(dim=1))
+        # rec = self.recall(predictions, target.argmax(dim=1))
         auroc = self.AUROC(predictions, target.argmax(dim=1))
-        prec = self.precision_m(predictions, target.argmax(dim=1))
-        self.logger.experiment.add_scalar("val_acc", acc)
-        self.logger.experiment.add_scalar("val_recall", rec)
-        self.logger.experiment.add_scalar("val_AUROC", auroc)
-        self.logger.experiment.add_scalar("val_precision", prec)
+        # prec = self.precision_m(predictions, target.argmax(dim=1))
+        # f1 = self.F1(predictions, target.argmax(dim=1))
+        # conf_matrix = self.conf_matrix(predictions, target.argmax(dim=1))
+        # print(conf_matrix)
+
+        # self.logger.experiment.add_scalar("val_acc", acc)
+        # self.logger.experiment.add_scalar("val_recall", rec)
+        # self.logger.experiment.add_scalar("val_AUROC", auroc)
+        # self.logger.experiment.add_scalar("val_precision", prec)
         # self.conf_matrix(predictions, target.argmax(dim=1))
-        self.log("val_acc_step", self.accuracy, prog_bar=True)
-        self.log("val_recall_step", self.recall, prog_bar=True)
-        self.log("val_AUROC_step", self.AUROC, prog_bar=True)
-        self.log("val_precision_step", self.precision_m, prog_bar=True)
+        # self.log("val_acc_step", self.accuracy, prog_bar=True)
+        # self.log("val_recall_step", self.recall, prog_bar=True)
+        # self.log("val_AUROC_step", self.AUROC, prog_bar=True)
+        # self.log("val_precision_step", self.precision_m, prog_bar=True)
+        self.logger.experiment.add_scalars(
+            "clf_metrics_val",
+            {
+                "val_acc": acc,
+                "val_recall": rec,
+                "val_auroc": auroc,
+                "val_prec": prec,
+                "train_f1": f1,
+            },
+            global_step=self.global_step,
+        )
 
     def test_step(self, batch, batch_idx):
         objs, target = batch
@@ -158,8 +236,8 @@ class WindNetPL(pl.LightningModule):
         # logging
         # self.logger.experiment.add_image("generated_images", grid, 0)
 
-        self.log("val_loss", loss, prog_bar=True)
-        tqdm_dict = {"val_loss": loss}
+        self.log("test_loss", loss, prog_bar=True)
+        tqdm_dict = {"test_loss": loss}
         output = OrderedDict(
             {
                 "loss": loss,
@@ -175,15 +253,65 @@ class WindNetPL(pl.LightningModule):
         # update and log
         predictions = outputs["preds"]
         target = outputs["target"]
-        self.accuracy(predictions, target.argmax(dim=1))
-        self.recall(predictions, target.argmax(dim=1))
-        self.AUROC(predictions, target.argmax(dim=1))
-        self.precision_m(predictions, target.argmax(dim=1))
+        conf_m = self.conf_matrix(predictions, target.argmax(dim=1))
+        tp, fp, fn, tn = conf_m[0, 0], conf_m[0, 1], conf_m[1, 0], conf_m[1, 1]
+        acc = (tp + fp) / (conf_m.sum())
+        rec = (
+            tp / (tp + fp)
+            if (tp + fp) > 0
+            else torch.tensor(0.0, dtype=target.dtype, device=target.device)
+        )
+        prec = (
+            tp / (tp + fn)
+            if (tp + fn) > 0
+            else torch.tensor(0.0, dtype=target.dtype, device=target.device)
+        )
+        f1 = (
+            tp / (tp + 0.5 * (fp + fn))
+            if ((tp + 0.5 * (fp + fn))) > 0
+            else torch.tensor(0.0, dtype=target.dtype, device=target.device)
+        )
+        # self.accuracy(predictions, target.argmax(dim=1))
+        # self.recall(predictions, target.argmax(dim=1))
+        auroc = self.AUROC(predictions, target.argmax(dim=1))
+        # self.precision_m(predictions, target.argmax(dim=1))
+        # f1 = self.F1(predictions, target.argmax(dim=1))
+        # conf_matrix = self.conf_matrix(predictions, target.argmax(dim=1))
+        # print(conf_matrix)
         # self.conf_matrix(predictions, target.argmax(dim=1))
-        self.log("test_acc_step", self.accuracy, prog_bar=True)
-        self.log("test_recall_step", self.recall, prog_bar=True)
-        self.log("test_AUROC_step", self.AUROC, prog_bar=True)
-        self.log("test_precision_step", self.precision_m, prog_bar=True)
+        # print(
+        #     "acc:",
+        #     metrics.accuracy_score(
+        #         target.argmax(dim=1).cpu().numpy(),
+        #         predictions.argmax(dim=1).cpu().numpy(),
+        #     ),
+        # )
+        # print(
+        #     "rec:",
+        #     metrics.recall_score(
+        #         target.argmax(dim=1).cpu().numpy(),
+        #         predictions.argmax(dim=1).cpu().numpy(),
+        #     ),
+        # )
+        # print(
+        #     "prec:",
+        #     metrics.precision_score(
+        #         target.argmax(dim=1).cpu().numpy(),
+        #         predictions.argmax(dim=1).cpu().numpy(),
+        #     ),
+        # )
+        # print(
+        #     "f1:",
+        #     metrics.f1_score(
+        #         target.argmax(dim=1).cpu().numpy(),
+        #         predictions.argmax(dim=1).cpu().numpy(),
+        #     ),
+        # )
+        self.log("test_acc_step", acc, prog_bar=True)
+        self.log("test_recall_step", rec, prog_bar=True)
+        self.log("test_AUROC_step", auroc, prog_bar=True)
+        self.log("test_precision_step", prec, prog_bar=True)
+        self.log("test_f1_step", f1, prog_bar=True)
 
     def configure_optimizers(self):
         lr = self.args["lr"]

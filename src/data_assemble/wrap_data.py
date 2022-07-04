@@ -1,6 +1,7 @@
 import os
 import random
 import pickle
+from click import pass_context
 import numpy as np
 import pytorch_lightning as pl
 from torchvision import transforms
@@ -10,10 +11,7 @@ import torch
 
 class WindDataModule(pl.LightningDataModule):
     def __init__(
-        self,
-        X: dict,
-        y: dict,
-        batch_size: int = 128,
+        self, X: dict, y: dict, batch_size: int = 128, downsample: bool = True
     ):
         super().__init__()
         self.batch_size = batch_size
@@ -37,16 +35,34 @@ class WindDataModule(pl.LightningDataModule):
 
         self.dl_dict = {"batch_size": self.batch_size}
 
+        if downsample:
+            class_sample_count = [
+                len(self.y_train) - sum(self.y_train),
+                sum(self.y_train),
+            ]
+            weights = 1 / torch.Tensor(class_sample_count)
+            self.sampler = torch.utils.data.sampler.WeightedRandomSampler(
+                weights, self.batch_size
+            )
+        else:
+            self.sampler = None
+
     def prepare_data(self):
-        self.y_train = torch.tensor(
-            [[0.0, 1.0] if v else [1, 0.0] for v in self.y_train], dtype=torch.float64
-        )
-        self.y_val = torch.tensor(
-            [[0.0, 1.0] if v else [1.0, 0.0] for v in self.y_val], dtype=torch.float64
-        )
-        self.y_test = torch.tensor(
-            [[0.0, 1.0] if v else [1.0, 0.0] for v in self.y_test], dtype=torch.float64
-        )
+        if type(self.y_train) == torch.Tensor and len(self.y_train.shape) == 2:
+            pass
+        else:
+            self.y_train = torch.tensor(
+                [[0.0, 1.0] if v else [1, 0.0] for v in self.y_train],
+                dtype=torch.float64,
+            )
+            self.y_val = torch.tensor(
+                [[0.0, 1.0] if v else [1.0, 0.0] for v in self.y_val],
+                dtype=torch.float64,
+            )
+            self.y_test = torch.tensor(
+                [[0.0, 1.0] if v else [1.0, 0.0] for v in self.y_test],
+                dtype=torch.float64,
+            )
 
     def setup(self, stage=None):
         if stage == "fit" or stage is None:
@@ -63,13 +79,13 @@ class WindDataModule(pl.LightningDataModule):
             )
 
     def train_dataloader(self):
-        return DataLoader(self.dataset_train, **self.dl_dict)
+        return DataLoader(self.dataset_train, sampler=self.sampler, **self.dl_dict)
 
     def val_dataloader(self):
-        return DataLoader(self.dataset_train, **self.dl_dict)
+        return DataLoader(self.dataset_train, sampler=self.sampler, **self.dl_dict)
 
     def test_dataloader(self):
-        return DataLoader(self.dataset_train, **self.dl_dict)
+        return DataLoader(self.dataset_train, sampler=self.sampler, **self.dl_dict)
 
 
 def train_val_test_split(
