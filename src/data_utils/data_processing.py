@@ -22,7 +22,6 @@ def get_file_paths(
     Arguments:
       path_to_data (str): path to directory that containts terraclim dataset
       feature_names (list): list of required features
-
     Returns:
       dict: key -- feature name; value -- list of related tif files
     """
@@ -152,7 +151,6 @@ def extract_latitude_longtitute(path_to_tifs: str, feature_name: str):
     Arguments:
       path_to_data (str): path to directory that containts terraclim dataset
       feature_names (str): feature name of the interest
-
     Returns:
       tuple: longtitude and latitude 1d arrays
     """
@@ -261,3 +259,95 @@ def get_nps(feature_names, path_to_tifs, verbose=False, dset_num=0):
         nps["tmean"] = (nps["tmax"] + nps["tmin"]) / 2
 
     return nps
+
+
+def cmiper(cmip, lat_left, lat_right, lon_left, lon_right):
+    """
+    Preprocess CMIP to understandable DataFrame.
+
+    cmip - downloaded CMIP as a DataFrame.
+    """
+    a = cmip.loc[
+        (cmip.lat_bnds >= lat_left - 1.5) & (cmip.lat_bnds <= lat_right + 1.5)
+    ]  # Широта
+    a = a.loc[(a.lon_bnds >= lon_left) & (a.lon_bnds <= lon_right)]  # Долгота
+
+    a = a.reset_index()
+    a.drop(
+        columns=["time_bnds", "lat_bnds", "lon_bnds", "height", "bnds", "time"],
+        inplace=True,
+    )
+
+    lat_idx = list(set(a.lat))
+    lon_idx = list(set(a.lon))
+    le_lat, le_lon = preprocessing.LabelEncoder(), preprocessing.LabelEncoder()
+    le_lat.fit(lat_idx)
+    le_lon.fit(lon_idx)
+
+    a.insert(loc=0, column="lat_idx", value=le_lat.transform(a.lat))
+    a.insert(loc=1, column="lon_idx", value=le_lon.transform(a.lon))
+    a.drop(columns=["lat", "lon"], inplace=True)
+
+    return a
+
+
+def to_3dar(cmip_pr):
+    """
+    Preprocess CMIP to 3d np.array.
+
+    cmip_pr - preprocessed cmip.
+    """
+    day = int(cmip_pr.shape[0] / 3650)
+    lonn = cmip_pr.lon_idx.unique().shape[0]
+    latt = cmip_pr.lat_idx.unique().shape[0]
+    fin = []
+
+    for i in range(3650):
+
+        aa = cmip_pr[i * day : i * day + day]  # cannot put variable day here
+        z = np.zeros((latt, lonn))
+        for i, j, w in zip(aa["lat_idx"], aa["lon_idx"], aa["sfcWind"]):
+            z[i, j] = w
+        fin.append(z[1:-1])
+    fin = np.stack(fin)
+
+    x = np.arange(18, 170.01, 2)  # longitude   25
+    y = np.arange(41.25, 78.74, 1.5)  # latitude
+
+    xnew = np.arange(18, 170.01, 0.25)  # 25
+    ynew = np.arange(41.25, 78.74, 0.25)  # [::-1]              # 19
+
+    ss_x = np.where(((xnew >= 19) & (xnew <= 169)))[0]  # 22
+    ss_y = np.where(((ynew >= 41) & (ynew <= 77)))[0]  # 15
+
+    final = []
+    for z in fin:
+        f = interpolate.interp2d(x, y, z)  # or (x, y, z)
+        final.append(f(xnew, ynew)[np.ix_(ss_y, ss_x)])
+    final = np.stack(final)
+
+    new_final = []
+    for i in final:
+        new_final.append(i[::-1])
+    final = np.stack(new_final)
+
+    # feb_28_in_2008_and_2012 = [788, 2248]
+
+    feb_2012 = (final[2248] + final[2249]) / 2
+    feb_2012 = np.expand_dims(feb_2012, axis=0)
+    final = np.vstack((final[:2249], feb_2012, final[2249:]))
+
+    feb_2008 = (final[788] + final[789]) / 2
+    feb_2008 = np.expand_dims(feb_2008, axis=0)
+    final = np.vstack((final[:789], feb_2008, final[789:]))
+
+    return final
+
+
+def extract_cmip_grid(cmip, lat_left, lat_right, lon_left, lon_right):
+    """
+    Consist of all needed functions for the preprocessing of CMIP.
+    """
+
+    intermediate = cmiper(cmip, lat_left, lat_right, lon_left, lon_right)
+    return to_3dar(intermediate)
