@@ -82,10 +82,10 @@ class WindDataModule(pl.LightningDataModule):
         return DataLoader(self.dataset_train, sampler=self.sampler, **self.dl_dict)
 
     def val_dataloader(self):
-        return DataLoader(self.dataset_train, sampler=self.sampler, **self.dl_dict)
+        return DataLoader(self.dataset_val, sampler=self.sampler, **self.dl_dict)
 
     def test_dataloader(self):
-        return DataLoader(self.dataset_train, sampler=self.sampler, **self.dl_dict)
+        return DataLoader(self.dataset_test, sampler=self.sampler, **self.dl_dict)
 
 
 def train_val_test_split(
@@ -143,10 +143,14 @@ def extract_splitted_data(path_to_dump: str, st_split_dict: dict) -> tuple:
             st_dir = os.path.join(path_to_dump, st)
             with open(os.path.join(st_dir, "objects.pkl"), "rb") as f:
                 X_ = pickle.load(f)
-            with open(os.path.join(st_dir, "target.pkl"), "rb") as f:
-                y_ = pickle.load(f)
             X_split.append(X_)
-            y_split.append(y_)
+            try:
+                with open(os.path.join(st_dir, "target.pkl"), "rb") as f:
+                    y_ = pickle.load(f)
+                y_split.append(y_)
+            except FileNotFoundError:
+                y_split.append([])
+
         X[split_part] = np.concatenate(X_split)
         y[split_part] = np.concatenate(y_split)
     return X, y

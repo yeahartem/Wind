@@ -126,17 +126,9 @@ class WindNetPL(pl.LightningModule):
             if ((tp + 0.5 * (fp + fn))) > 0
             else torch.tensor(0.0, dtype=target.dtype, device=target.device)
         )
-        # acc = self.accuracy(predictions, target.argmax(dim=1))
-        # rec = self.recall(predictions, target.argmax(dim=1))
-        auroc = self.AUROC(predictions, target.argmax(dim=1))
-        # prec = self.precision_m(predictions, target.argmax(dim=1))
-        # f1 = self.F1(predictions, target.argmax(dim=1))
-        # stats_scores = self.stats_scores(predictions, target.argmax(dim=1))
 
-        # self.log("train_acc_step", self.accuracy, prog_bar=True)
-        # self.log("train_recall_step", self.recall, prog_bar=True)
-        # self.log("train_AUROC_step", self.AUROC, prog_bar=True)
-        # self.log("train_precision_step", self.precision_m, prog_bar=True)
+        auroc = self.AUROC(predictions, target.argmax(dim=1))
+
         self.logger.experiment.add_scalars(
             "clf_metrics_train",
             {
@@ -149,19 +141,11 @@ class WindNetPL(pl.LightningModule):
             global_step=self.global_step,
         )
 
-        # self.log("train_conf_matrix_step", self.conf_matrix)
-
-    #     # self.metric(outputs['preds'], outputs['target'])
-    #     self.log('metric', self.metric)
-
     def validation_step(self, batch, batch_idx):
         objs, target = batch
 
         predictions = self(objs)
         loss = self.loss(predictions, target)
-
-        # logging
-        # self.logger.experiment.add_image("generated_images", grid, 0)
 
         self.log("val_loss", loss, prog_bar=True)
         tqdm_dict = {"val_loss": loss}
@@ -198,23 +182,9 @@ class WindNetPL(pl.LightningModule):
             if ((tp + 0.5 * (fp + fn))) > 0
             else torch.tensor(0.0, dtype=target.dtype, device=target.device)
         )
-        # acc = self.accuracy(predictions, target.argmax(dim=1))
-        # rec = self.recall(predictions, target.argmax(dim=1))
-        auroc = self.AUROC(predictions, target.argmax(dim=1))
-        # prec = self.precision_m(predictions, target.argmax(dim=1))
-        # f1 = self.F1(predictions, target.argmax(dim=1))
-        # conf_matrix = self.conf_matrix(predictions, target.argmax(dim=1))
-        # print(conf_matrix)
 
-        # self.logger.experiment.add_scalar("val_acc", acc)
-        # self.logger.experiment.add_scalar("val_recall", rec)
-        # self.logger.experiment.add_scalar("val_AUROC", auroc)
-        # self.logger.experiment.add_scalar("val_precision", prec)
-        # self.conf_matrix(predictions, target.argmax(dim=1))
-        # self.log("val_acc_step", self.accuracy, prog_bar=True)
-        # self.log("val_recall_step", self.recall, prog_bar=True)
-        # self.log("val_AUROC_step", self.AUROC, prog_bar=True)
-        # self.log("val_precision_step", self.precision_m, prog_bar=True)
+        auroc = self.AUROC(predictions, target.argmax(dim=1))
+
         self.logger.experiment.add_scalars(
             "clf_metrics_val",
             {
@@ -232,9 +202,6 @@ class WindNetPL(pl.LightningModule):
 
         predictions = self(objs)
         loss = self.loss(predictions, target)
-
-        # logging
-        # self.logger.experiment.add_image("generated_images", grid, 0)
 
         self.log("test_loss", loss, prog_bar=True)
         tqdm_dict = {"test_loss": loss}
@@ -271,42 +238,7 @@ class WindNetPL(pl.LightningModule):
             if ((tp + 0.5 * (fp + fn))) > 0
             else torch.tensor(0.0, dtype=target.dtype, device=target.device)
         )
-        # self.accuracy(predictions, target.argmax(dim=1))
-        # self.recall(predictions, target.argmax(dim=1))
         auroc = self.AUROC(predictions, target.argmax(dim=1))
-        # self.precision_m(predictions, target.argmax(dim=1))
-        # f1 = self.F1(predictions, target.argmax(dim=1))
-        # conf_matrix = self.conf_matrix(predictions, target.argmax(dim=1))
-        # print(conf_matrix)
-        # self.conf_matrix(predictions, target.argmax(dim=1))
-        # print(
-        #     "acc:",
-        #     metrics.accuracy_score(
-        #         target.argmax(dim=1).cpu().numpy(),
-        #         predictions.argmax(dim=1).cpu().numpy(),
-        #     ),
-        # )
-        # print(
-        #     "rec:",
-        #     metrics.recall_score(
-        #         target.argmax(dim=1).cpu().numpy(),
-        #         predictions.argmax(dim=1).cpu().numpy(),
-        #     ),
-        # )
-        # print(
-        #     "prec:",
-        #     metrics.precision_score(
-        #         target.argmax(dim=1).cpu().numpy(),
-        #         predictions.argmax(dim=1).cpu().numpy(),
-        #     ),
-        # )
-        # print(
-        #     "f1:",
-        #     metrics.f1_score(
-        #         target.argmax(dim=1).cpu().numpy(),
-        #         predictions.argmax(dim=1).cpu().numpy(),
-        #     ),
-        # )
         self.log("test_acc_step", acc, prog_bar=True)
         self.log("test_recall_step", rec, prog_bar=True)
         self.log("test_AUROC_step", auroc, prog_bar=True)
