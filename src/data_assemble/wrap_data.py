@@ -51,18 +51,21 @@ class WindDataModule(pl.LightningDataModule):
         if type(self.y_train) == torch.Tensor and len(self.y_train.shape) == 2:
             pass
         else:
-            self.y_train = torch.tensor(
-                [[0.0, 1.0] if v else [1, 0.0] for v in self.y_train],
-                dtype=torch.float64,
-            )
-            self.y_val = torch.tensor(
-                [[0.0, 1.0] if v else [1.0, 0.0] for v in self.y_val],
-                dtype=torch.float64,
-            )
-            self.y_test = torch.tensor(
-                [[0.0, 1.0] if v else [1.0, 0.0] for v in self.y_test],
-                dtype=torch.float64,
-            )
+            # self.y_train = torch.tensor(
+            #     [[0, 1] if v else [1, 0] for v in self.y_train],
+            #     dtype=torch.long,
+            # )
+            # self.y_val = torch.tensor(
+            #     [[0, 1] if v else [1, 0] for v in self.y_val],
+            #     dtype=torch.long,
+            # )
+            # self.y_test = torch.tensor(
+            #     [[0, 1] if v else [1, 0] for v in self.y_test],
+            #     dtype=torch.long,
+            # )
+            self.y_train = torch.tensor(self.y_train, dtype=torch.long)
+            self.y_val = torch.tensor(self.y_val, dtype=torch.long)
+            self.y_test = torch.tensor(self.y_test, dtype=torch.long)
 
     def setup(self, stage=None):
         if stage == "fit" or stage is None:

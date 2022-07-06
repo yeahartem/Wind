@@ -38,7 +38,7 @@ class WindNet(nn.Module):
             self.maxpool,
             self.flatten,
             self.fc,
-            nn.Sigmoid(),
+            nn.Softmax(),
         ).double()
 
     def forward(self, X) -> torch.Tensor:
@@ -70,7 +70,9 @@ class WindNetPL(pl.LightningModule):
             num_classes=2, threshold=args["threshold"]
         )
 
-        self.loss_f = nn.BCELoss(weight=torch.tensor([1.0, self.args["pos_weight"]]))
+        self.loss_f = nn.NLLLoss(
+            weight=torch.tensor([1.0, self.args["pos_weight"]], dtype=torch.float64)
+        )  # nn.BCELoss(weight=torch.tensor([1.0, self.args["pos_weight"]]))
 
     def forward(self, X):
         return self.net(X)
@@ -78,7 +80,7 @@ class WindNetPL(pl.LightningModule):
     def loss(
         self, y_hat, y
     ):  # POS WEIGHT CLASS !!! https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html
-        return self.loss_f(y_hat, y)
+        return self.loss_f(torch.log(y_hat), y)
 
     def training_step(self, batch, batch_idx):
         objs, target = batch
@@ -108,7 +110,7 @@ class WindNetPL(pl.LightningModule):
         # update and log
         predictions = outputs["preds"]
         target = outputs["target"]
-        conf_m = self.conf_matrix(predictions.argmax(dim=1), target.argmax(dim=1))
+        conf_m = self.conf_matrix(predictions, target)
         tp, fp, fn, tn = conf_m[0, 0], conf_m[0, 1], conf_m[1, 0], conf_m[1, 1]
         acc = (tp + tn) / (conf_m.sum())
         rec = (
@@ -127,7 +129,7 @@ class WindNetPL(pl.LightningModule):
             else torch.tensor(0.0, dtype=target.dtype, device=target.device)
         )
 
-        auroc = self.AUROC(predictions, target.argmax(dim=1))
+        auroc = self.AUROC(predictions, target)
 
         self.logger.experiment.add_scalars(
             "clf_metrics_train",
@@ -164,7 +166,7 @@ class WindNetPL(pl.LightningModule):
         # update and log
         predictions = outputs["preds"]
         target = outputs["target"]
-        conf_m = self.conf_matrix(predictions, target.argmax(dim=1))
+        conf_m = self.conf_matrix(predictions, target)
         tp, fp, fn, tn = conf_m[0, 0], conf_m[0, 1], conf_m[1, 0], conf_m[1, 1]
         acc = (tp + fp) / (conf_m.sum())
         rec = (
@@ -183,7 +185,7 @@ class WindNetPL(pl.LightningModule):
             else torch.tensor(0.0, dtype=target.dtype, device=target.device)
         )
 
-        auroc = self.AUROC(predictions, target.argmax(dim=1))
+        auroc = self.AUROC(predictions, target)
 
         self.logger.experiment.add_scalars(
             "clf_metrics_val",
@@ -196,6 +198,7 @@ class WindNetPL(pl.LightningModule):
             },
             global_step=self.global_step,
         )
+        self.log("val_auroc", auroc)
 
     def test_step(self, batch, batch_idx):
         objs, target = batch
@@ -220,7 +223,7 @@ class WindNetPL(pl.LightningModule):
         # update and log
         predictions = outputs["preds"]
         target = outputs["target"]
-        conf_m = self.conf_matrix(predictions, target.argmax(dim=1))
+        conf_m = self.conf_matrix(predictions, target)
         tp, fp, fn, tn = conf_m[0, 0], conf_m[0, 1], conf_m[1, 0], conf_m[1, 1]
         acc = (tp + fp) / (conf_m.sum())
         rec = (
@@ -238,7 +241,7 @@ class WindNetPL(pl.LightningModule):
             if ((tp + 0.5 * (fp + fn))) > 0
             else torch.tensor(0.0, dtype=target.dtype, device=target.device)
         )
-        auroc = self.AUROC(predictions, target.argmax(dim=1))
+        auroc = self.AUROC(predictions, target)
         self.log("test_acc_step", acc, prog_bar=True)
         self.log("test_recall_step", rec, prog_bar=True)
         self.log("test_AUROC_step", auroc, prog_bar=True)
