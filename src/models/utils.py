@@ -70,6 +70,58 @@ def metrics(model, X_test, y_test, plot_roc=False):
   metrics = [acc, precision, recall, f1, roc_auc]
   return metrics
 
+def metrics_wnd(model, X_test, y_test, wnd, plot_roc=False):
+  # y_pred = model.predict(X_test)
+  lr_probs = model.predict_proba(X_test)
+  # keep probabilities for the positive outcome only
+  lr_probs = lr_probs[:, 1]
+  if len(lr_probs) < wnd:
+    lr_probs_new = [lr_probs.max() for _ in range(len(lr_probs))]
+  else: 
+    lr_probs_new = []
+    for i in range(wnd):
+        lr_probs_new.append(lr_probs[:wnd].max())
+    for i in range(wnd, len(lr_probs) - wnd):
+        lr_probs_new.append(lr_probs[i - wnd:i + wnd].max())
+    for i in range(len(lr_probs) - wnd, len(lr_probs)):
+        lr_probs_new.append(lr_probs[-wnd:].max())
+  # calculate scores
+  ns_probs = [1 for _ in range(len(y_test))]
+  ns_auc = roc_auc_score(y_test, ns_probs)
+  lr_auc = roc_auc_score(y_test, lr_probs_new)
+  # summarize scores
+  print('No Skill: ROC AUC=%.3f' % (ns_auc))
+  print('Clf: ROC AUC=%.3f' % (lr_auc))
+  # calculate roc curves
+  ns_fpr, ns_tpr, _ = roc_curve(y_test, ns_probs)
+  lr_fpr, lr_tpr, thresholds = roc_curve(y_test, lr_probs_new)
+  # plot the roc curve for the model
+  gmeans = np.sqrt(lr_tpr * (1-lr_fpr))
+  ix = np.argmax(gmeans)
+  roc_auc = lr_auc
+  if plot_roc:
+    plt.plot(ns_fpr, ns_tpr, linestyle='--', label='Constant 1')
+    plt.plot(lr_fpr, lr_tpr, marker='.', label='Clf')
+    plt.scatter(lr_fpr[ix], lr_tpr[ix], marker='o', color='black', label='Best')
+    # axis labels
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    # show the legend
+    plt.legend()
+    # show the plot
+    plt.show()
+    
+  
+    print('Best Threshold=%f, G-Mean=%.3f' % (thresholds[ix], gmeans[ix]))
+  y_pred = [lr_probs_new[i] >= 0.5 for i in range(len(lr_probs_new))]#thresholds[ix]
+  acc = accuracy_score(y_test, y_pred)
+  precision = precision_score(y_test, y_pred)
+  recall = recall_score(y_test, y_pred)
+  f1 = f1_score(y_test, y_pred)
+  print(confusion_matrix(y_test, y_pred))
+  metrics = [acc, precision, recall, f1, roc_auc]
+  return metrics
+
 def train_test_splitter(list_to_split, split_ratio=0.4):
     random.shuffle(list_to_split)
     elements = len(list_to_split)
