@@ -144,12 +144,15 @@ def extract_splitted_data(path_to_dump: str, st_split_dict: dict) -> tuple:
         y_split = []
         for st in sts:
             st_dir = os.path.join(path_to_dump, st)
-            with open(os.path.join(st_dir, "objects.pkl"), "rb") as f:
-                X_ = pickle.load(f)
+            with open(os.path.join(st_dir, "objects.npy"), "rb") as f:
+                # X_ = pickle.load(f)
+                X_ = np.load(f)
+
             X_split.append(X_)
             try:
-                with open(os.path.join(st_dir, "target.pkl"), "rb") as f:
-                    y_ = pickle.load(f)
+                with open(os.path.join(st_dir, "target.npy"), "rb") as f:
+                    # y_ = pickle.load(f)
+                    y_ = np.load(f)
                 y_split.append(y_)
             except FileNotFoundError:
                 y_split.append([])

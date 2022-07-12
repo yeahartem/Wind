@@ -4,6 +4,7 @@ from osgeo import gdal
 from matplotlib import pyplot as plt
 import numpy as np
 from tqdm import tqdm
+from collections import OrderedDict
 import os
 from src.data_utils import data_processing as dp
 from src.data_utils.data_processing import make_model_dataset
@@ -27,7 +28,7 @@ warnings.filterwarnings("ignore")
 
 
 def assemble_numpy_ds(
-    blocks: dict, target: dict, stations_pixs: dict, include_target: bool = True
+    blocks: OrderedDict, target: dict, stations_pixs: dict, include_target: bool = True
 ) -> tuple:
     """Assembles numpy dataset
         !!! CRUNCH ATTENTION !!!!
@@ -36,7 +37,7 @@ def assemble_numpy_ds(
         matches target and objects on pixels of stations
 
     Args:
-        blocks (dict): block data from climate model
+        blocks (OrderedDict): block data from climate model, keys must be ordered
         target (dict): target from stations. see `get_y` function
         stations_pixs (dict): pixels of stations
         include_target: (bool): if to include target into dataset
@@ -46,6 +47,7 @@ def assemble_numpy_ds(
     """
     X = {}
     y = {}
+    wind_len = blocks["wind"][list(blocks["wind"].keys())[0]].shape[0]
     if include_target:
         for k in tqdm(target.keys()):
             X_i = []
@@ -53,12 +55,13 @@ def assemble_numpy_ds(
                 curr_pix = stations_pixs[k.casefold()]
                 if curr_pix in blocks[fn].keys():
                     X_i.append(blocks[fn][curr_pix])
+
             if len(X_i) > 0:
                 y_i = target[k]
-                X_i = sorted(X_i, key=lambda x: x.shape[0])
-                wind_len = X_i[1].shape[
-                    0
-                ]  #!!!!!!!! CRUNCH SINCE CURRENT WIND SPEED DATA IS NOT ALIGNED WITH THE OTHER ON TIME!!!!!
+                # X_i = sorted(X_i, key=lambda x: x.shape[0])
+                # wind_len = X_i[1].shape[
+                #     0
+                # ]  #!!!!!!!! CRUNCH SINCE CURRENT WIND SPEED DATA IS NOT ALIGNED WITH THE OTHER ON TIME!!!!!
                 X_i = [x[:wind_len, :, :] for x in X_i]
                 for X_i_idx in range(len(X_i)):
                     if X_i[X_i_idx].shape[0] == 1:
@@ -79,12 +82,14 @@ def assemble_numpy_ds(
                 # curr_pix = stations_pixs[k.casefold()]
                 # if curr_pix in blocks[fn].keys():
                 X_i.append(blocks[fn][curr_pix])
+                # if fn == "wind":
+                #     wind_len = X_i[-1].shape[0]
             if len(X_i) > 0:
 
-                X_i = sorted(X_i, key=lambda x: x.shape[0])
-                wind_len = X_i[1].shape[
-                    0
-                ]  #!!!!!!!! CRUNCH SINCE CURRENT WIND SPEED DATA IS NOT ALIGNED WITH THE OTHER ON TIME!!!!!
+                # X_i = sorted(X_i, key=lambda x: x.shape[0])
+                # wind_len = X_i[1].shape[
+                #     0
+                # ]  #!!!!!!!! CRUNCH SINCE CURRENT WIND SPEED DATA IS NOT ALIGNED WITH THE OTHER ON TIME!!!!!
                 X_i = [x[:wind_len, :, :] for x in X_i]
                 for X_i_idx in range(len(X_i)):
                     if X_i[X_i_idx].shape[0] == 1:
@@ -204,7 +209,7 @@ def make_blocks(
     cmip: np.ndarray = None,
     verbose: bool = False,
     dset_num: int = 0,
-) -> dict:
+) -> OrderedDict:
     """slices blocks from .tif data
 
     Args:
@@ -242,4 +247,5 @@ def make_blocks(
                     i - half_side_size : i + half_side_size,
                     j - half_side_size : j + half_side_size,
                 ]
+    slices_dict = OrderedDict(sorted(slices_dict.items()))
     return slices_dict
