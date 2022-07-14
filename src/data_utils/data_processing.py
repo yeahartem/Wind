@@ -8,6 +8,8 @@ from tqdm import tqdm
 import subprocess
 import pandas as pd
 from geopy.distance import great_circle
+from sklearn import preprocessing
+from scipy import interpolate
 
 # from geopy.distance import geodesic
 from math import sin, cos, sqrt, atan2, radians
@@ -272,6 +274,8 @@ def cmiper(cmip, lat_left, lat_right, lon_left, lon_right):
     ]  # Широта
     a = a.loc[(a.lon_bnds >= lon_left) & (a.lon_bnds <= lon_right)]  # Долгота
 
+    a = a.reorder_levels(['time','bnds','lat','lon']).sort_index()  # Takes much time
+
     a = a.reset_index()
     a.drop(
         columns=["time_bnds", "lat_bnds", "lon_bnds", "height", "bnds", "time"],
@@ -302,23 +306,22 @@ def to_3dar(cmip_pr):
     latt = cmip_pr.lat_idx.unique().shape[0]
     fin = []
 
-    for i in range(3650):
-
-        aa = cmip_pr[i * day : i * day + day]  # cannot put variable day here
+    for n in range(3650):
+        aa = cmip_pr[n * day : n * day + day]  # cannot put variable day here
         z = np.zeros((latt, lonn))
         for i, j, w in zip(aa["lat_idx"], aa["lon_idx"], aa["sfcWind"]):
             z[i, j] = w
         fin.append(z[1:-1])
     fin = np.stack(fin)
 
-    x = np.arange(18, 170.01, 2)  # longitude   25
-    y = np.arange(41.25, 78.74, 1.5)  # latitude
+    x = np.arange(18, 170.01, 2)       # longitude   25
+    y = np.arange(39.75, 77.26, 1.5)  # latitude
 
-    xnew = np.arange(18, 170.01, 0.25)  # 25
-    ynew = np.arange(41.25, 78.74, 0.25)  # [::-1]              # 19
+    xnew = np.arange(18, 170.01, 0.25)                         # 25
+    ynew = np.arange(39.75, 77.26, 0.25)#[::-1]              # 19           
 
-    ss_x = np.where(((xnew >= 19) & (xnew <= 169)))[0]  # 22
-    ss_y = np.where(((ynew >= 41) & (ynew <= 77)))[0]  # 15
+    ss_x = np.where(((xnew >= 18.75) & (xnew <= 169.25)))[0]   # 19 - 169
+    ss_y = np.where(((ynew >= 40.75) & (ynew <= 77.25)))[0]    # 41 - 77
 
     final = []
     for z in fin:
@@ -331,16 +334,6 @@ def to_3dar(cmip_pr):
         new_final.append(i[::-1])
     final = np.stack(new_final)
 
-    # feb_28_in_2008_and_2012 = [788, 2248]
-
-    feb_2012 = (final[2248] + final[2249]) / 2
-    feb_2012 = np.expand_dims(feb_2012, axis=0)
-    final = np.vstack((final[:2249], feb_2012, final[2249:]))
-
-    feb_2008 = (final[788] + final[789]) / 2
-    feb_2008 = np.expand_dims(feb_2008, axis=0)
-    final = np.vstack((final[:789], feb_2008, final[789:]))
-
     return final
 
 
@@ -351,3 +344,16 @@ def extract_cmip_grid(cmip, lat_left, lat_right, lon_left, lon_right):
 
     intermediate = cmiper(cmip, lat_left, lat_right, lon_left, lon_right)
     return to_3dar(intermediate)
+
+
+def leap_years(ar, leap_idx):
+    """
+    Inserts 29 of February in a 3d-array.
+    leap_idx - indices of 29 of February in descending order.
+    """
+    for i in leap_idx:
+        feb = (ar[i] + ar[i + 1]) / 2
+        feb = np.expand_dims(feb, axis=0)
+        ar = np.vstack((ar[:i+1], feb, ar[i+1:]))
+    
+    return ar
