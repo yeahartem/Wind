@@ -31,8 +31,6 @@ def assemble_numpy_ds(
     blocks: OrderedDict, target: dict, stations_pixs: dict, include_target: bool = True
 ) -> tuple:
     """Assembles numpy dataset
-        !!! CRUNCH ATTENTION !!!!
-        !!! SINCE CURRENT WIND SPEED DATA IS NOT ALIGNED WITH THE OTHER ON TIME!!!!!
         stacks all available data into nd tensor, tiles elevation
         matches target and objects on pixels of stations
 
@@ -58,10 +56,7 @@ def assemble_numpy_ds(
 
             if len(X_i) > 0:
                 y_i = target[k]
-                # X_i = sorted(X_i, key=lambda x: x.shape[0])
-                # wind_len = X_i[1].shape[
-                #     0
-                # ]  #!!!!!!!! CRUNCH SINCE CURRENT WIND SPEED DATA IS NOT ALIGNED WITH THE OTHER ON TIME!!!!!
+                
                 X_i = [x[:wind_len, :, :] for x in X_i]
                 for X_i_idx in range(len(X_i)):
                     if X_i[X_i_idx].shape[0] == 1:
@@ -69,8 +64,7 @@ def assemble_numpy_ds(
                             [X_i[X_i_idx] for idx in range(X_i[-1].shape[0])]
                         ).squeeze()  # repeating elevation
                 X_i = np.stack(X_i, axis=1)
-                # X.append(X_i)
-                # y.append(y_i[:wind_len])
+                
                 X[k] = X_i
 
                 y[k] = y_i[:wind_len]
@@ -79,17 +73,12 @@ def assemble_numpy_ds(
         for curr_pix in blocks[some_key].keys():
             X_i = []
             for fn in blocks.keys():
-                # curr_pix = stations_pixs[k.casefold()]
-                # if curr_pix in blocks[fn].keys():
+                
                 X_i.append(blocks[fn][curr_pix])
-                # if fn == "wind":
-                #     wind_len = X_i[-1].shape[0]
+                
             if len(X_i) > 0:
 
-                # X_i = sorted(X_i, key=lambda x: x.shape[0])
-                # wind_len = X_i[1].shape[
-                #     0
-                # ]  #!!!!!!!! CRUNCH SINCE CURRENT WIND SPEED DATA IS NOT ALIGNED WITH THE OTHER ON TIME!!!!!
+                
                 X_i = [x[:wind_len, :, :] for x in X_i]
                 for X_i_idx in range(len(X_i)):
                     if X_i[X_i_idx].shape[0] == 1:
@@ -97,13 +86,10 @@ def assemble_numpy_ds(
                             [X_i[X_i_idx] for idx in range(X_i[-1].shape[0])]
                         ).squeeze()  # repeating elevation
                 X_i = np.stack(X_i, axis=1)
-                # X.append(X_i)
-                # y.append(y_i[:wind_len])
+                
                 X[curr_pix] = X_i
 
-            # y[k] = y_i[:wind_len]
-    # X = np.concatenate(X)
-    # y = np.concatenate(y)
+
     if include_target:
         return (X, y)
     else:
@@ -129,7 +115,7 @@ def get_y(
     Returns:
         dict: {station_name: indicators of exceeding threshold}
     """
-    # speed_th = 10
+    
     df["Дата"] = pd.to_datetime((df["Дата"]), format="%Y/%m/%d")
     df_start_end = df.loc[
         (df["Дата"] >= pd.to_datetime(start)) & (df["Дата"] <= pd.to_datetime(end))
