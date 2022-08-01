@@ -31,14 +31,14 @@ class WindNet(nn.Module):
         self.fc = nn.Linear(args["fc_size"], 2)
         self.args = args
         self.net = nn.Sequential(
-            self.conv1,
-            nn.ReLU(),
-            self.conv2,
-            nn.ReLU(),
-            self.maxpool,
-            self.flatten,
-            self.fc,
-            nn.Softmax(),
+            self.conv1, 
+            nn.ReLU(), 
+            self.conv2, 
+            nn.ReLU(), 
+            self.maxpool, 
+            self.flatten, 
+            self.fc, 
+            nn.Softmax(), 
         ).double()
 
     def forward(self, X) -> torch.Tensor:
@@ -85,7 +85,7 @@ class WindNetPL(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         objs, target = batch
 
-        predictions = self(objs)
+        predictions = self(objs) 
         loss = self.loss(predictions, target)
 
         # logging
