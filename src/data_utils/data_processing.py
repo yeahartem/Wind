@@ -1,5 +1,8 @@
 from tkinter import Y
 from osgeo import gdal
+import sys
+sys.path.append('..')
+from src.data_utils.utils import check_leap_year
 
 import matplotlib.pyplot as plt
 import os, glob
@@ -10,9 +13,72 @@ import pandas as pd
 from geopy.distance import great_circle
 from sklearn import preprocessing
 from scipy import interpolate
+import xarray
 
 # from geopy.distance import geodesic
 from math import sin, cos, sqrt, atan2, radians
+
+def open_dataxarray(path_to_data: str, contains: list = ['2006', 'max']) -> xarray.DataArray:
+    # path_to_data = os.path.join('..', 'data', 'stash', 'WindProject', 'cmip_stash') 
+    # contains = ['2006', 'max']
+    ncs = np.array(sorted(os.listdir(path_to_data)))
+    ncs_filtered = [nc for nc in ncs if np.prod([cond in nc for cond in contains])]
+
+    f1 = xarray.load_dataset(os.path.join(path_to_data, ncs_filtered[0]), decode_times=False)
+    units, reference_date = f1.time.attrs['units'].split('since')
+    f1['time'] = pd.date_range(start=reference_date, periods=f1.sizes['time'])
+    f1_xarray = f1.to_array()
+    t0 = np.apply_along_axis(check_leap_year, axis=0, arr=f1_xarray.time.data)
+    years_unique = np.unique(f1_xarray.time.loc[t0].data.astype('datetime64[Y]'))
+    assert bool(np.prod([str(y) + '-02-29' in f1_xarray.time.loc[t0].data.astype('datetime64[D]').astype('str') for y in years_unique])), "no 29 feb on leap years"
+    return f1_xarray
+
+def reduce_to_area(data_arr: xarray.DataArray, lat_min: float = 41.12, lat_max: float = 81.49, lon_min: float = 19.38, lon_max: float = 169.40) -> xarray.DataArray:
+    # extracting band name
+    
+    band_name = [v for v in dict(data_arr.coords)['variable'].data if 'bnds' not in v][0]
+    output = data_arr.sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max), variable=band_name)
+    assert np.allclose(output.data[:, 0, :, :], output.data[:, 1, :, :]), "`bnds` dim components of tensor are not identical"
+    return output
+
+def interp_timewise(data_arr: xarray.DataArray, lon_res: float = 0.25, lat_res: float = 0.25, interp_method: str = 'cubic', plot_example: bool =True) -> tuple:
+    assert np.allclose(data_arr.data[:, 0, :, :], data_arr.data[:, 1, :, :]), "2d components of tensor are not identical"
+    timesteps = len(data_arr.time.data)
+    plot_example_dice = np.random.randint(0, timesteps)
+    znews = []
+    x = data_arr.lon.data
+    y = data_arr.lat.data
+    xnew = np.arange(x[0], x[-1], lon_res)
+    ynew = np.arange(y[0], y[-1], lat_res)
+    for t in tqdm(range(timesteps)):
+        
+        # xx, yy = np.meshgrid(x, y)
+        z = data_arr.data[t, 0, :, :]
+        f = interpolate.interp2d(x, y, z, kind=interp_method)
+
+        
+        znew = f(xnew, ynew)
+        znews.append(znew)
+        if plot_example and t == plot_example_dice:
+            plt.figure()
+            plt.title('before')
+            plt.imshow(z)
+            plt.show()
+            plt.figure()
+            plt.title('after')
+            plt.imshow(znew)
+            plt.show()
+    output = np.stack(znews)
+    return (output, xnew, ynew)
+    
+def interp_timewise_xarray(data_arr: xarray.DataArray, lon_res: float = 0.25, lat_res: float = 0.25, interp_method: str = 'cubic', plot_example: bool =True) -> xarray.DataArray:
+
+    data_new, xnew, ynew = interp_timewise(data_arr, interp_method=interp_method, plot_example=plot_example)
+    data_arr.coords
+    coords_new = {'lon': ("lon", xnew), 'lat': ("lat", ynew), 'time': ("time", data_arr.time.data)}
+    output = xarray.DataArray(data=data_new, coords=coords_new, dims=('time', 'lat', 'lon'), attrs=data_arr.attrs)
+
+    return output
 
 
 def get_file_paths(
@@ -266,7 +332,6 @@ def get_nps(feature_names, path_to_tifs, verbose=False, dset_num=0):
 def cmiper(cmip, lat_left, lat_right, lon_left, lon_right):
     """
     Preprocess CMIP to understandable DataFrame.
-
     cmip - downloaded CMIP as a DataFrame.
     """
     a = cmip.loc[
@@ -298,7 +363,6 @@ def cmiper(cmip, lat_left, lat_right, lon_left, lon_right):
 def to_3dar(cmip_pr):
     """
     Preprocess CMIP to 3d np.array.
-
     cmip_pr - preprocessed cmip.
     """
     day = int(cmip_pr.shape[0] / 3650)
